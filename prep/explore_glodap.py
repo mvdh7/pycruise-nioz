@@ -1,5 +1,9 @@
 import pandas as pd, numpy as np
 from matplotlib import pyplot as plt
+import calkulate as calk
+
+# Initialise random number generator
+rng = np.random.default_rng(7)
 
 # Import GLODAP Atlantic dataset and tidy up
 glodap = pd.read_csv(
@@ -49,6 +53,19 @@ ax.invert_yaxis()
 
 #%% Extract data for the selected cruise and reorganise
 data = glodap[glodap.cruise == cruise]
+data["station"] = data.station.astype(int)
+
+# Renumber bottles for simplicity
+b = 0
+s = data.station.iloc[0]
+for i, row in data.iterrows():
+    if row.station == s:
+        b += 1
+        data.loc[i, "bottle"] = b
+    else:
+        b = 1
+        data.loc[i, "bottle"] = b
+        s += 1
 
 # Get stations, convert to degrees and minutes, add errors, write to text file
 stations = data[["station", "latitude", "longitude"]].groupby("station").mean()
@@ -57,8 +74,7 @@ with open("data/stations.txt", "w") as f:
     for s, row in stations.iterrows():
         lat_deg = np.floor(np.abs(row.latitude))
         lat_dec_mins = (np.abs(row.latitude) - lat_deg) * 60
-        # lat_dir = "N" if row.latitude > 0 else "S"  # correct approach
-        lat_dir = "S"  # deliberate error
+        lat_dir = "N" if row.latitude > 0 else "S"
         lat_mins = np.floor(lat_dec_mins)
         lat_secs = (lat_dec_mins - lat_mins) * 60
         lon_deg = np.floor(np.abs(row.longitude))
@@ -66,7 +82,9 @@ with open("data/stations.txt", "w") as f:
         lon_dir = "E" if row.longitude > 0 else "W"
         lon_mins = np.floor(lon_dec_mins)
         lon_secs = (lon_dec_mins - lon_mins) * 60
-        if s < 75 or s > 114:
+        s_random = rng.integers(3)
+        if s_random == 0:
+            #
             f.write(
                 (
                     "{station:.0f}\t"
@@ -82,7 +100,14 @@ with open("data/stations.txt", "w") as f:
                     lon_dir=lon_dir,
                 )
             )
+        elif s_random == 1:
+            f.write(
+                ("{station:.0f}\t" + "{lat:.4f}\t" + "{lon:.4f}\n").format(
+                    station=s, lat=row.latitude, lon=row.longitude
+                )
+            )
         else:
+            lat_dir = "S"  # deliberate error
             f.write(
                 (
                     "{station:.0f}\t"
@@ -100,3 +125,95 @@ with open("data/stations.txt", "w") as f:
                     lon_dir=lon_dir,
                 )
             )
+
+#%% Extract nutrient data
+data["density25"] = calk.density.seawater_1atm_MP81(
+    temperature=25, salinity=data.salinity
+)
+nuts_list = ["nitrate", "nitrite", "silicate", "phosphate"]
+for nut in nuts_list:
+    data["{}_vol".format(nut)] = data[nut] * data.density25
+data["nitrate_nitrite_vol"] = data.nitrate_vol + data.nitrite_vol
+nuts = data[
+    [
+        "station",
+        "cast",
+        "bottle",
+        "nitrate_nitrite_vol",
+        "nitrite_vol",
+        "silicate_vol",
+        "phosphate_vol",
+    ]
+]
+
+# Construct new station-cast-bottle column
+nuts["sample_id"] = ""
+s = -999
+for i, row in nuts.iterrows():
+    if row.station == s:
+        nuts.loc[i, "sample_id"] = "{:.0f}".format(row.bottle)
+    else:
+        nuts.loc[i, "sample_id"] = "{:.0f}-{:.0f}-{:.0f}".format(
+            row.station, row.cast, row.bottle
+        )
+        s = row.station
+nuts = nuts[
+    [
+        "sample_id",
+        "nitrate_nitrite_vol",
+        "nitrite_vol",
+        "silicate_vol",
+        "phosphate_vol",
+    ]
+]
+nuts = nuts[
+    ~pd.isnull(nuts.nitrate_nitrite_vol)
+    | ~pd.isnull(nuts.nitrite_vol)
+    | ~pd.isnull(nuts.silicate_vol)
+    | ~pd.isnull(nuts.phosphate_vol)
+]
+
+# Replace zeros with less-thans
+nuts.loc[nuts.nitrite_vol == 0, "nitrite_vol"] = "<0.01"
+nuts.loc[nuts.nitrate_nitrite_vol == 0, "nitrate_nitrite_vol"] = "<0.01"
+nuts.loc[nuts.phosphate_vol == 0, "phosphate_vol"] = "<0.01"
+
+# Rename columns and save to file
+nuts.rename(
+    columns={
+        "sample_id": "Sample ID",
+        "nitrate_nitrite_vol": "NO3+NO2",
+        "nitrite_vol": "NO2",
+        "silicate_vol": "Si",
+        "phosphate_vol": "PO4",
+    },
+    inplace=True,
+)
+excel_file = "data/nutrients.xlsx"
+nuts.to_excel(
+    excel_file, sheet_name="Station {:.0f}".format(s), index=False, na_rep="n.a."
+)
+
+#%% Extract CTD data
+ctd = data[
+    [
+        "station",
+        "cast",
+        "year",
+        "month",
+        "day",
+        "hour",
+        "minute",
+        "bottomdepth",
+        "bottle",
+        "pressure",
+        "depth",
+        "temperature",
+        "salinity",
+        "oxygen",
+    ]
+]
+ctd.rename(columns={"bottomdepth": "bottom_depth"}, inplace=True)
+ctd.to_csv("data/ctd.csv", na_rep=-999, index=False)
+
+# Add calibrations for oxygen and salinity?
