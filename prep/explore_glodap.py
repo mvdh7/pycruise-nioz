@@ -7,7 +7,9 @@ rng = np.random.default_rng(7)
 
 # Import GLODAP Atlantic dataset and tidy up
 glodap = pd.read_csv(
-    "/home/matthew/data/glodap/GLODAPv2.2021_Atlantic_Ocean.csv", na_values=-9999
+    # "/home/matthew/data/glodap/GLODAPv2.2021_Atlantic_Ocean.csv",  # Ubuntu
+    "C:/Users/mphum/Documents/data/GLODAP/GLODAPv2.2021_Atlantic_Ocean.csv",  # Windows
+    na_values=-9999,
 )
 cols_G2 = {col: col.replace("G2", "") for col in glodap.columns}
 glodap.rename(columns=cols_G2, inplace=True)
@@ -52,8 +54,9 @@ ax.scatter("latitude", "depth", c="salinity", data=glodap[glodap.cruise == cruis
 ax.invert_yaxis()
 
 #%% Extract data for the selected cruise and reorganise
-data = glodap[glodap.cruise == cruise]
+data = glodap[glodap.cruise == cruise].copy()
 data["station"] = data.station.astype(int)
+data["cast"] = data.cast.astype(int)
 
 # Renumber bottles for simplicity
 b = 0
@@ -68,9 +71,13 @@ for i, row in data.iterrows():
         s += 1
 
 # Get stations, convert to degrees and minutes, add errors, write to text file
-stations = data[["station", "latitude", "longitude"]].groupby("station").mean()
+stations = (
+    data[["station", "cast", "latitude", "longitude"]]
+    .groupby(["station", "cast"])
+    .mean()
+)
 with open("data/stations.txt", "w") as f:
-    f.write("Station no.\tLatitude\tLongitude\n")
+    f.write("Station no.\tCast\tLatitude\tLongitude\n")
     for s, row in stations.iterrows():
         lat_deg = np.floor(np.abs(row.latitude))
         lat_dec_mins = (np.abs(row.latitude) - lat_deg) * 60
@@ -84,14 +91,14 @@ with open("data/stations.txt", "w") as f:
         lon_secs = (lon_dec_mins - lon_mins) * 60
         s_random = rng.integers(3)
         if s_random == 0:
-            #
             f.write(
                 (
-                    "{station:.0f}\t"
+                    "{station:.0f}\t{cast:.0f}\t"
                     + "{lat_deg:02.0f}°{lat_mins:05.2f}'{lat_dir}\t"
                     + "{lon_deg:03.0f}°{lon_mins:05.2f}'{lon_dir}\n"
                 ).format(
-                    station=s,
+                    station=s[0],
+                    cast=s[1],
                     lat_deg=lat_deg,
                     lat_mins=lat_dec_mins,
                     lat_dir=lat_dir,
@@ -102,19 +109,20 @@ with open("data/stations.txt", "w") as f:
             )
         elif s_random == 1:
             f.write(
-                ("{station:.0f}\t" + "{lat:.4f}\t" + "{lon:.4f}\n").format(
-                    station=s, lat=row.latitude, lon=row.longitude
+                ("{station:.0f}\t{cast:.0f}\t" + "{lat:.4f}\t" + "{lon:.4f}\n").format(
+                    station=s[0], cast=s[1], lat=row.latitude, lon=row.longitude
                 )
             )
         else:
             lat_dir = "S"  # deliberate error
             f.write(
                 (
-                    "{station:.0f}\t"
+                    "{station:.0f}\t{cast:.0f}\t"
                     + "{lat_deg:02.0f}°{lat_mins:02.0f}'{lat_secs:02.0f}\"{lat_dir}\t"
                     + "{lon_deg:03.0f}°{lon_mins:02.0f}'{lon_secs:02.0f}\"{lon_dir}\n"
                 ).format(
-                    station=s,
+                    station=s[0],
+                    cast=s[1],
                     lat_deg=lat_deg,
                     lat_mins=lat_mins,
                     lat_secs=lat_secs,
@@ -144,7 +152,7 @@ nuts = data[
         "silicate_vol",
         "phosphate_vol",
     ]
-]
+].copy()
 
 # Construct new station-cast-bottle column
 nuts["sample_id"] = ""
@@ -212,8 +220,23 @@ ctd = data[
         "salinity",
         "oxygen",
     ]
-]
+].copy()
 ctd.rename(columns={"bottomdepth": "bottom_depth"}, inplace=True)
-ctd.to_csv("data/ctd.csv", na_rep=-999, index=False)
 
-# Add calibrations for oxygen and salinity?
+# Add oxygen and salinity calibrations
+oxygen_slope = 1.03  # slope of oxygen calibration
+oxygen_offset = 4.7  # offset in oxygen calibration
+oxygen_std = 1.0  # 1-sigma uncertainty in discrete oxygen measurements
+oxygen_true = ctd.oxygen.copy()
+ctd["oxygen"] = (oxygen_true - oxygen_offset) / oxygen_slope
+salinity_slope = 0.991  # slope of salinity calibration
+salinity_offset = 0.28  # offset in salinity calibration
+salinity_std = 0.01  # 1-sigma uncertainty in discrete salinity measurements
+salinity_true = ctd.salinity.copy()
+ctd["salinity"] = (salinity_true - salinity_offset) / salinity_slope
+
+for s, srow in stations.iterrows():
+    S = (ctd.station == s[0]) & (ctd.cast == s[1])
+    ctd[S].drop(columns=["station", "cast"]).to_csv(
+        "data/ctd-bottles/ctd-bottles-{}-{}.csv".format(*s), na_rep=-999, index=False
+    )
