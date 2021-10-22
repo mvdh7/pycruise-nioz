@@ -55,7 +55,7 @@ for i, station in stations.iterrows():
             )
             if lat_dmsf.group(4) == "S":
                 lat *= -1
-                
+
         # Parse decimal degrees format --- latitude
         else:
             lat = float(stations.loc[i, "Latitude"])
