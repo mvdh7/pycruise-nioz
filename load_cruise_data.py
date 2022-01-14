@@ -1,3 +1,4 @@
+import os
 import pandas as pd, numpy as np
 import pycruise_tools as pct
 
@@ -32,6 +33,10 @@ for i, row in stations.iterrows():
 stations.set_index("station_cast", inplace=True)
 
 #%% Import CTD data from all stations
+filepath = "data/ctd-bottles/"
+extra_ctd_files = os.listdir(filepath)
+extra_ctd_files = [f for f in extra_ctd_files if f.endswith(".csv")]
+missing_ctd_files = []
 ctd = []
 for i, row in stations.iterrows():
     print(i)
@@ -40,14 +45,23 @@ for i, row in stations.iterrows():
     # filename = "data/ctd-bottles/ctd-bottles-1-1.csv"
     # filename = "data/ctd-bottles/ctd-bottles-" + "1" + "-" + "1" + ".csv"
     # filename = "data/ctd-bottles/ctd-bottles-" + str(row.station) + "-" + str(row.cast) + ".csv"
-    filename = "data/ctd-bottles/ctd-bottles-{}-{}.csv".format(row.station, row.cast)
+    filename = "ctd-bottles-{}-{}.csv".format(row.station, row.cast)
     
-    # Import CTD data for this station and append to list
-    _ctd = pd.read_csv(filename, na_values=-999)
-    _ctd["station_cast"] = i
-    ctd.append(_ctd)
+    try:
+    
+        # Import CTD data for this station and append to list
+        _ctd = pd.read_csv(filepath + filename, na_values=-999)
+        _ctd["station_cast"] = i
+        ctd.append(_ctd)
+        
+        # Take file out of extra_ctd_files list
+        extra_ctd_files.remove(filename)
+        
+    except FileNotFoundError:
+        
+        missing_ctd_files.append(filename)
 
-# Concatenate all stations into single df
+#%% Concatenate all stations into single df
 ctd = pd.concat(ctd)
 
 #%% Put data from stations into ctd
