@@ -71,3 +71,57 @@ for var in ["lat", "lon", "station", "cast"]:
 # Get datetime
 ctd["datetime"] = pd.to_datetime(ctd[['year', 'month', 'day', 'hour', 'minute']])
 # Next: use groupby() to condense ^ into stations table
+
+#%% Put averages from ctd back into stations
+stations['datetime'] = ctd[['station_cast', 'datetime']].groupby(
+    'station_cast'
+).mean()
+
+#%% Import nutrients dataset (Excel file)
+nutrients = pd.read_excel(
+    'data/nutrients.xlsx', na_values=['n.a.']
+    ).rename(
+    columns={'Sample ID': 'sample_id', 'NO3+NO2': 'NO3_NO2'}
+    )
+
+# nutrients.where(
+#     nutrients != '<0.01', other=0, inplace=True)
+for n in ['NO3_NO2', 'NO2', 'PO4']:
+    nutrients[n].where(
+        nutrients[n] != '<0.01', other=0, inplace=True)
+    nutrients[n] = nutrients[n].astype(float)
+
+def parse_nutrients_sample_id(sid):
+    '''Convert station_id column in nutrients df into separate
+    station, cast, and bottle values.
+    '''
+    sid_split = sid.split('-')
+    if len(sid_split) == 3:
+        # station = sid_split[0]
+        # cast = sid_split[1]
+        # bottle = sid_split[2]
+        station, cast, bottle = sid_split
+    elif len(sid_split) == 1:
+        station = np.nan
+        cast = np.nan
+        bottle = sid_split[0]
+    else:
+        station = np.nan
+        cast = np.nan
+        bottle = np.nan
+    return pd.Series({
+        'station': station,
+        'cast': cast,
+        'bottle': bottle,
+        })
+
+sids = nutrients.sample_id.apply(parse_nutrients_sample_id)
+
+# nutrients = pd.concat([nutrients, sids], axis=1)
+
+for c, cdata in sids.iteritems():
+    nutrients[c] = cdata
+
+# Fill NaNs in station and cast
+nutrients.station.fillna(method='ffill', inplace=True)
+nutrients.cast.fillna(method='ffill', inplace=True)
