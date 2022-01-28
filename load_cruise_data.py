@@ -116,7 +116,6 @@ def parse_nutrients_sample_id(sid):
         })
 
 sids = nutrients.sample_id.apply(parse_nutrients_sample_id)
-
 # nutrients = pd.concat([nutrients, sids], axis=1)
 
 for c, cdata in sids.iteritems():
@@ -125,3 +124,29 @@ for c, cdata in sids.iteritems():
 # Fill NaNs in station and cast
 nutrients.station.fillna(method='ffill', inplace=True)
 nutrients.cast.fillna(method='ffill', inplace=True)
+
+#%%
+# Convert station, cast and bottle to integers not strings
+for col in ['station', 'cast', 'bottle']:
+    nutrients[col] = nutrients[col].astype(int)
+ctd['bottle'] = ctd['bottle'].astype(int)
+
+
+def get_station_cast_bottle(row):
+    """Get station-cast-bottle string from the relevant columns."""
+    return "{}-{}-{}".format(row.station, row.cast, row.bottle)
+
+# Set station-cast-bottle as the index for ctd and nutrients dfs
+for df in [ctd, nutrients]:
+    df['scb'] = df.apply(get_station_cast_bottle, axis=1)
+    df.set_index('scb', inplace=True)  # must use inplace not df = df.... !
+
+# Move nutrients data across to ctd
+for col in ['NO3_NO2', 'NO2', 'Si', 'PO4']:
+    ctd[col] = nutrients[col]
+
+# Get NO3
+ctd["NO3"] = ctd.NO3_NO2 - ctd.NO2
+
+#%% Save the CTD data
+ctd.to_csv('results/ctd.csv')
