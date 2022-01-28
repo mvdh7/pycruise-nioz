@@ -7,8 +7,8 @@ rng = np.random.default_rng(7)
 
 # Import GLODAP Atlantic dataset and tidy up
 glodap = pd.read_csv(
-    "/home/matthew/data/glodap/GLODAPv2.2021_Atlantic_Ocean.csv",  # Ubuntu
-    # "C:/Users/mphum/Documents/data/GLODAP/GLODAPv2.2021_Atlantic_Ocean.csv",  # Windows
+    # "/home/matthew/data/glodap/GLODAPv2.2021_Atlantic_Ocean.csv",  # Ubuntu
+    "C:/Users/mphum/Documents/data/GLODAP/GLODAPv2.2021_Atlantic_Ocean.csv",  # Windows
     na_values=-9999,
 )
 cols_G2 = {col: col.replace("G2", "") for col in glodap.columns}
