@@ -7,8 +7,8 @@ rng = np.random.default_rng(7)
 
 # Import GLODAP Atlantic dataset and tidy up
 glodap = pd.read_csv(
-    # "/home/matthew/data/glodap/GLODAPv2.2021_Atlantic_Ocean.csv",  # Ubuntu
-    "C:/Users/mphum/Documents/data/GLODAP/GLODAPv2.2021_Atlantic_Ocean.csv",  # Windows
+    "/home/matthew/data/glodap/GLODAPv2.2021_Atlantic_Ocean.csv",  # Ubuntu
+    # "C:/Users/mphum/Documents/data/GLODAP/GLODAPv2.2021_Atlantic_Ocean.csv",  # Windows
     na_values=-9999,
 )
 cols_G2 = {col: col.replace("G2", "") for col in glodap.columns}
@@ -114,7 +114,7 @@ with open("data/stations.txt", "w") as f:
                 )
             )
         else:
-            lat_dir = "S"  # deliberate error
+            # lat_dir = "S"  # deliberate error
             f.write(
                 (
                     "{station:.0f}\t{cast:.0f}\t"
@@ -152,19 +152,21 @@ nuts = data[
         "silicate_vol",
         "phosphate_vol",
     ]
-].copy()
+].copy().sort_values(["station", "cast", "bottle"])
 
 # Construct new station-cast-bottle column
 nuts["sample_id"] = ""
 s = -999
+c = -999
 for i, row in nuts.iterrows():
-    if row.station == s:
+    if (row.station == s) & (row.cast == c):
         nuts.loc[i, "sample_id"] = "{:.0f}".format(row.bottle)
     else:
         nuts.loc[i, "sample_id"] = "{:.0f}-{:.0f}-{:.0f}".format(
             row.station, row.cast, row.bottle
         )
         s = row.station
+        c = row.cast
 nuts = nuts[
     [
         "sample_id",
@@ -235,6 +237,7 @@ salinity_std = 0.01  # 1-sigma uncertainty in discrete salinity measurements
 salinity_true = ctd.salinity.copy()
 ctd["salinity"] = (salinity_true - salinity_offset) / salinity_slope
 
+# Export CTD data files
 for s, srow in stations.iterrows():
     S = (ctd.station == s[0]) & (ctd.cast == s[1])
     ctd[S].drop(columns=["station", "cast"]).to_csv(
