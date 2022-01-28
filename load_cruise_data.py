@@ -125,3 +125,10 @@ for c, cdata in sids.iteritems():
 # Fill NaNs in station and cast
 nutrients.station.fillna(method='ffill', inplace=True)
 nutrients.cast.fillna(method='ffill', inplace=True)
+
+#%%
+for df in [nutrients, ctd]:
+    df['scb'] = df.apply(
+        lambda row: "{}-{}-{}".format(row.station, row.cast, row.bottle),
+        axis=1
+    )
