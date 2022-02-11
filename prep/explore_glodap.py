@@ -230,17 +230,37 @@ ctd = data[
 ].copy()
 ctd.rename(columns={"bottomdepth": "bottom_depth"}, inplace=True)
 
-# Add oxygen and salinity calibrations
-oxygen_slope = 1.03  # slope of oxygen calibration
+# Add oxygen and salinity (de)calibrations
+oxygen_slope = 1.15  # slope of oxygen calibration
 oxygen_offset = 4.7  # offset in oxygen calibration
+oxygen_pressure = 0.01  # pressure effect on oxygen
 oxygen_std = 1.0  # 1-sigma uncertainty in discrete oxygen measurements
 oxygen_true = ctd.oxygen.copy()
-ctd["oxygen"] = (oxygen_true - oxygen_offset) / oxygen_slope
-salinity_slope = 0.991  # slope of salinity calibration
-salinity_offset = 0.28  # offset in salinity calibration
+ctd["oxygen"] = (
+    oxygen_true - oxygen_offset - oxygen_pressure * ctd.pressure
+) / oxygen_slope
+salinity_squared = sa = 0.1
+salinity_slope = sb = 0.96  # slope of salinity calibration
+salinity_offset = sc = 0.28  # offset in salinity calibration
 salinity_std = 0.01  # 1-sigma uncertainty in discrete salinity measurements
+salinity_centre = 35
 salinity_true = ctd.salinity.copy()
-ctd["salinity"] = (salinity_true - salinity_offset) / salinity_slope
+# ctd["salinity"] = (salinity_true - salinity_offset) / salinity_slope
+ctd["salinity"] = (
+    -sb + np.sqrt(sb ** 2 - 4 * sa * (sc - salinity_true + salinity_centre))
+) / (2 * sa) + salinity_centre
+
+# Simulate oxygen and salinity calibration data
+ctd_calibrate = ctd.sample(frac=0.1, random_state=7)
+ctd_calibrate["salinity_lab"] = salinity_true
+ctd_calibrate["salinity_lab"] += rng.normal(
+    loc=0, scale=salinity_std, size=ctd_calibrate.shape[0]
+)
+ctd_calibrate["oxygen_lab"] = oxygen_true
+ctd_calibrate["oxygen_lab"] += rng.normal(
+    loc=0, scale=oxygen_std, size=ctd_calibrate.shape[0]
+)
+ctd_calibrate.to_csv('data/sensor-calibration.csv', index=False)
 
 # Export CTD data files
 for s, srow in stations.iterrows():
