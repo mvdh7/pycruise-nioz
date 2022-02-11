@@ -170,11 +170,8 @@ def _lsqfun_convert_salinity(sal_coeffs, sensor_salinity, true_salinity):
 
 L = ~np.isnan(cali.salinity)
 
-opt_result_salinity = least_squares(
-    _lsqfun_convert_salinity,
-    [0, 1, 0],
-    args=(cali[L].salinity.to_numpy(), cali[L].salinity_lab.to_numpy()),
-)
+opt_result_salinity = least_squares(_lsqfun_convert_salinity, [0, 1, 0],
+    args=(cali[L].salinity.to_numpy(), cali[L].salinity_lab.to_numpy()),)
 
 ctd["salinity"] = convert_salinity(opt_result_salinity["x"], ctd.salinity_raw)
 
