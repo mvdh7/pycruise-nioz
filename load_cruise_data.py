@@ -1,5 +1,7 @@
 import os
 import pandas as pd, numpy as np
+from scipy.optimize import least_squares
+from matplotlib import pyplot as plt
 import pycruise_tools as pct
 
 # Import lat/lon/station info
@@ -125,19 +127,23 @@ nutrients.station.fillna(method="ffill", inplace=True)
 nutrients.cast.fillna(method="ffill", inplace=True)
 
 #%%
+# Import calibration dataset
+cali = pd.read_csv("data/sensor-calibration.csv")
+
 # Convert station, cast and bottle to integers not strings
 for col in ["station", "cast", "bottle"]:
     nutrients[col] = nutrients[col].astype(int)
+    cali[col] = cali[col].astype(int)
 ctd["bottle"] = ctd["bottle"].astype(int)
 
 
 def get_station_cast_bottle(row):
     """Get station-cast-bottle string from the relevant columns."""
-    return "{}-{}-{}".format(row.station, row.cast, row.bottle)
+    return "{:.0f}-{:.0f}-{:.0f}".format(row.station, row.cast, row.bottle)
 
 
 # Set station-cast-bottle as the index for ctd and nutrients dfs
-for df in [ctd, nutrients]:
+for df in [ctd, nutrients, cali]:
     df["scb"] = df.apply(get_station_cast_bottle, axis=1)
     df.set_index("scb", inplace=True)  # must use inplace not df = df.... !
 
@@ -147,6 +153,45 @@ for col in ["NO3_NO2", "NO2", "Si", "PO4"]:
 
 # Get NO3
 ctd["NO3"] = ctd.NO3_NO2 - ctd.NO2
+
+ctd["salinity_raw"] = ctd.salinity.copy()
+
+#%% Calibrate salinity and oxygen
+def convert_salinity(sal_coeffs, sensor_salinity):
+    """Convert sensor salinity values into calibrated real values."""
+    squared, slope, intercept = sal_coeffs
+    real_salinity = squared * sensor_salinity ** 2 + slope * sensor_salinity + intercept
+    return real_salinity
+
+
+def _lsqfun_convert_salinity(sal_coeffs, sensor_salinity, true_salinity):
+    return convert_salinity(sal_coeffs, sensor_salinity) - true_salinity
+
+
+L = ~np.isnan(cali.salinity)
+
+opt_result_salinity = least_squares(
+    _lsqfun_convert_salinity,
+    [0, 1, 0],
+    args=(cali[L].salinity.to_numpy(), cali[L].salinity_lab.to_numpy()),
+)
+
+ctd["salinity"] = convert_salinity(opt_result_salinity["x"], ctd.salinity_raw)
+
+
+fx = np.linspace(ctd.salinity_raw.min(), ctd.salinity_raw.max(), num=500)
+fy = convert_salinity(opt_result_salinity["x"], fx)
+
+fig, ax = plt.subplots(dpi=300)
+cali.plot.scatter("salinity", "salinity_lab", ax=ax)
+ax.plot(fx, fy)
+ax.set_xlabel("Sensor raw salinity")
+ax.set_ylabel("Calibrated lab measurements")
+ax.set_title(
+    "Salinity = {:.3f} raw$^2$ + {:.2f} raw + {:.1f}".format(*opt_result_salinity["x"])
+)
+plt.tight_layout()
+plt.savefig("figures/salinity_calibration.png")
 
 #%% Save the CTD data
 ctd.to_csv("results/ctd.csv")
