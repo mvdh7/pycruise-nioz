@@ -7,8 +7,8 @@ rng = np.random.default_rng(7)
 
 # Import GLODAP Atlantic dataset and tidy up
 glodap = pd.read_csv(
-    "/home/matthew/data/glodap/GLODAPv2.2021_Atlantic_Ocean.csv",  # Ubuntu
-    # "C:/Users/mphum/Documents/data/GLODAP/GLODAPv2.2021_Atlantic_Ocean.csv",  # Windows
+    # "/home/matthew/data/glodap/GLODAPv2.2021_Atlantic_Ocean.csv",  # Ubuntu
+    "C:/Users/mphum/Documents/data/GLODAP/GLODAPv2.2021_Atlantic_Ocean.csv",  # Windows
     na_values=-9999,
 )
 cols_G2 = {col: col.replace("G2", "") for col in glodap.columns}
@@ -142,17 +142,21 @@ nuts_list = ["nitrate", "nitrite", "silicate", "phosphate"]
 for nut in nuts_list:
     data["{}_vol".format(nut)] = data[nut] * data.density25
 data["nitrate_nitrite_vol"] = data.nitrate_vol + data.nitrite_vol
-nuts = data[
-    [
-        "station",
-        "cast",
-        "bottle",
-        "nitrate_nitrite_vol",
-        "nitrite_vol",
-        "silicate_vol",
-        "phosphate_vol",
+nuts = (
+    data[
+        [
+            "station",
+            "cast",
+            "bottle",
+            "nitrate_nitrite_vol",
+            "nitrite_vol",
+            "silicate_vol",
+            "phosphate_vol",
+        ]
     ]
-].copy().sort_values(["station", "cast", "bottle"])
+    .copy()
+    .sort_values(["station", "cast", "bottle"])
+)
 nuts = nuts[(nuts.station != 81) & (nuts.station != 82)]  # these are screwed up somehow
 
 # Construct new station-cast-bottle column
