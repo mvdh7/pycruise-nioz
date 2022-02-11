@@ -40,25 +40,25 @@ missing_ctd_files = []
 ctd = []
 for i, row in stations.iterrows():
     print(i)
-    
+
     # Determine filename from row of stations table (station & cast)
     # filename = "data/ctd-bottles/ctd-bottles-1-1.csv"
     # filename = "data/ctd-bottles/ctd-bottles-" + "1" + "-" + "1" + ".csv"
     # filename = "data/ctd-bottles/ctd-bottles-" + str(row.station) + "-" + str(row.cast) + ".csv"
     filename = "ctd-bottles-{}-{}.csv".format(row.station, row.cast)
-    
+
     try:
-    
+
         # Import CTD data for this station and append to list
         _ctd = pd.read_csv(filepath + filename, na_values=-999)
         _ctd["station_cast"] = i
         ctd.append(_ctd)
-        
+
         # Take file out of extra_ctd_files list
         extra_ctd_files.remove(filename)
-        
+
     except FileNotFoundError:
-        
+
         missing_ctd_files.append(filename)
 
 #%% Concatenate all stations into single df
@@ -69,33 +69,29 @@ for var in ["lat", "lon", "station", "cast"]:
     ctd[var] = stations.loc[ctd.station_cast, var].values
 
 # Get datetime
-ctd["datetime"] = pd.to_datetime(ctd[['year', 'month', 'day', 'hour', 'minute']])
+ctd["datetime"] = pd.to_datetime(ctd[["year", "month", "day", "hour", "minute"]])
 # Next: use groupby() to condense ^ into stations table
 
 #%% Put averages from ctd back into stations
-stations['datetime'] = ctd[['station_cast', 'datetime']].groupby(
-    'station_cast'
-).mean()
+stations["datetime"] = ctd[["station_cast", "datetime"]].groupby("station_cast").mean()
 
 #%% Import nutrients dataset (Excel file)
-nutrients = pd.read_excel(
-    'data/nutrients.xlsx', na_values=['n.a.']
-    ).rename(
-    columns={'Sample ID': 'sample_id', 'NO3+NO2': 'NO3_NO2'}
-    )
+nutrients = pd.read_excel("data/nutrients.xlsx", na_values=["n.a."]).rename(
+    columns={"Sample ID": "sample_id", "NO3+NO2": "NO3_NO2"}
+)
 
 # nutrients.where(
 #     nutrients != '<0.01', other=0, inplace=True)
-for n in ['NO3_NO2', 'NO2', 'PO4']:
-    nutrients[n].where(
-        nutrients[n] != '<0.01', other=0, inplace=True)
+for n in ["NO3_NO2", "NO2", "PO4"]:
+    nutrients[n].where(nutrients[n] != "<0.01", other=0, inplace=True)
     nutrients[n] = nutrients[n].astype(float)
 
+
 def parse_nutrients_sample_id(sid):
-    '''Convert station_id column in nutrients df into separate
+    """Convert station_id column in nutrients df into separate
     station, cast, and bottle values.
-    '''
-    sid_split = sid.split('-')
+    """
+    sid_split = sid.split("-")
     if len(sid_split) == 3:
         # station = sid_split[0]
         # cast = sid_split[1]
@@ -109,11 +105,14 @@ def parse_nutrients_sample_id(sid):
         station = np.nan
         cast = np.nan
         bottle = np.nan
-    return pd.Series({
-        'station': station,
-        'cast': cast,
-        'bottle': bottle,
-        })
+    return pd.Series(
+        {
+            "station": station,
+            "cast": cast,
+            "bottle": bottle,
+        }
+    )
+
 
 sids = nutrients.sample_id.apply(parse_nutrients_sample_id)
 # nutrients = pd.concat([nutrients, sids], axis=1)
@@ -122,31 +121,32 @@ for c, cdata in sids.iteritems():
     nutrients[c] = cdata
 
 # Fill NaNs in station and cast
-nutrients.station.fillna(method='ffill', inplace=True)
-nutrients.cast.fillna(method='ffill', inplace=True)
+nutrients.station.fillna(method="ffill", inplace=True)
+nutrients.cast.fillna(method="ffill", inplace=True)
 
 #%%
 # Convert station, cast and bottle to integers not strings
-for col in ['station', 'cast', 'bottle']:
+for col in ["station", "cast", "bottle"]:
     nutrients[col] = nutrients[col].astype(int)
-ctd['bottle'] = ctd['bottle'].astype(int)
+ctd["bottle"] = ctd["bottle"].astype(int)
 
 
 def get_station_cast_bottle(row):
     """Get station-cast-bottle string from the relevant columns."""
     return "{}-{}-{}".format(row.station, row.cast, row.bottle)
 
+
 # Set station-cast-bottle as the index for ctd and nutrients dfs
 for df in [ctd, nutrients]:
-    df['scb'] = df.apply(get_station_cast_bottle, axis=1)
-    df.set_index('scb', inplace=True)  # must use inplace not df = df.... !
+    df["scb"] = df.apply(get_station_cast_bottle, axis=1)
+    df.set_index("scb", inplace=True)  # must use inplace not df = df.... !
 
 # Move nutrients data across to ctd
-for col in ['NO3_NO2', 'NO2', 'Si', 'PO4']:
+for col in ["NO3_NO2", "NO2", "Si", "PO4"]:
     ctd[col] = nutrients[col]
 
 # Get NO3
 ctd["NO3"] = ctd.NO3_NO2 - ctd.NO2
 
 #%% Save the CTD data
-ctd.to_csv('results/ctd.csv')
+ctd.to_csv("results/ctd.csv")
