@@ -260,7 +260,7 @@ ctd_calibrate["oxygen_lab"] = oxygen_true
 ctd_calibrate["oxygen_lab"] += rng.normal(
     loc=0, scale=oxygen_std, size=ctd_calibrate.shape[0]
 )
-ctd_calibrate.to_csv('data/sensor-calibration.csv', index=False)
+ctd_calibrate.to_csv("data/sensor-calibration.csv", index=False)
 
 # Export CTD data files
 for s, srow in stations.iterrows():
