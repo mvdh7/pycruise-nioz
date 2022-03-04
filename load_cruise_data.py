@@ -154,6 +154,7 @@ for col in ["NO3_NO2", "NO2", "Si", "PO4"]:
 # Get NO3
 ctd["NO3"] = ctd.NO3_NO2 - ctd.NO2
 ctd["salinity_raw"] = ctd.salinity.copy()
+ctd["oxygen_raw"] = ctd.oxygen.copy()
 
 #%% Calibrate salinity and oxygen
 def convert_salinity(sal_coeffs, sensor_salinity):
@@ -191,6 +192,54 @@ ax.set_title(
 )
 plt.tight_layout()
 plt.savefig("figures/salinity_calibration.png")
+
+#%% Calibrate the oxygen data
+def convert_oxygen(coeffs, oxygen_raw, pressure):
+    '''Convert raw oxygen data into calibrated results.'''
+    intercept, slope, pressure_term = coeffs
+    return intercept + slope * oxygen_raw + pressure_term * pressure
+
+def _lsqfun_convert_oxygen(coeffs, oxygen_raw, pressure, oxygen_true):
+    return oxygen_true - convert_oxygen(coeffs, oxygen_raw, pressure)
+    
+L = ~np.isnan(cali.oxygen)
+opt_result_oxygen = least_squares(
+    _lsqfun_convert_oxygen,
+    [0, 1, 0],
+    args=(
+        cali[L].oxygen.to_numpy(),
+        cali[L].pressure.to_numpy(),
+        cali[L].oxygen_lab.to_numpy(),
+    ),
+)
+
+ctd['oxygen'] = convert_oxygen(opt_result_oxygen['x'], ctd.oxygen_raw, ctd.pressure)
+
+fx = np.linspace(ctd.oxygen_raw.min(), ctd.oxygen_raw.max(), num=500)
+fy = convert_oxygen(opt_result_oxygen["x"], fx, 0)
+
+fig, ax = plt.subplots(dpi=300)
+cali.plot.scatter('oxygen', 'oxygen_lab', ax=ax, c='pressure', cmap='viridis')
+ax.plot(fx, fy)
+
+#%%
+import xarray as xr
+
+gebco = xr.open_dataset('data/gebco_2021_n5.0_s-55.0_w-5.0_e4.0.nc')
+
+stations_lat = xr.DataArray(stations.lat)
+stations_lon = xr.DataArray(stations.lon)
+stations['elevation'] = gebco.elevation.interp(lat=stations_lat, lon=stations_lon)
+
+f_lat = np.linspace(-55, 5, num=1000)
+f_lon = np.full_like(f_lat, 1.0)
+f_lat_xr = xr.DataArray(f_lat, dims='z')
+f_lon_xr = xr.DataArray(f_lon, dims='z')
+f_elevation = gebco.elevation.interp(lat=f_lat_xr, lon=f_lon_xr)
+
+fig, ax = plt.subplots(dpi=300)
+ax.plot(f_lat, f_elevation)
+stations.plot('lat', 'elevation', ax=ax)
 
 #%% Save the CTD data
 ctd.to_csv("results/ctd.csv")
