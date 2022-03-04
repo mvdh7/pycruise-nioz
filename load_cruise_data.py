@@ -153,7 +153,6 @@ for col in ["NO3_NO2", "NO2", "Si", "PO4"]:
 
 # Get NO3
 ctd["NO3"] = ctd.NO3_NO2 - ctd.NO2
-
 ctd["salinity_raw"] = ctd.salinity.copy()
 
 #%% Calibrate salinity and oxygen
